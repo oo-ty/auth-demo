@@ -240,3 +240,28 @@ The Token Exchange Service checks this before issuing OBO tokens.
 | Backend batch job (no user) | Service Token |
 | User-initiated action through multiple services | **OBO Token** |
 | Infrastructure/health checks | Service Token |
+
+## FAQ: Why not just use Trusted Headers?
+
+A common question is: *Why can't we just ignore the user-provided headers and rely on headers injected by our trusted Gateway (Kong) or use the service's own identity?*
+
+### The "Trusted Subsystem" Problem
+
+If you rely on **Gateway Injection** or **Service Trust** (e.g., Service A calls Service B with Service A's credentials, and Service B trusts Service A to tell the truth about who the user is), you are using a **Trusted Subsystem** model.
+
+**The Risk:**
+If Service A is compromised, the attacker can tell Service B: *"I am acting on behalf of Admin"* or *"I am acting on behalf of CEO"*. Service B has no choice but to trust Service A, because the trust is implicit in the connection.
+
+**The OBO Solution (Zero Trust):**
+With OBO, Service A cannot simply claim to be acting for a user. It must present a token signed by the IAM.
+*   If Service A is compromised, it can only act on behalf of users for whom it *actually holds a valid token*.
+*   It cannot manufacture a token for "Admin" without the IAM's cooperation.
+
+### External References
+
+For more information on this "Trusted Subsystem vs. Delegation" architecture, refer to:
+
+*   **RFC 8693 (OAuth 2.0 Token Exchange):** specifically Section 1.1 "Impersonation vs. Delegation".
+*   **NIST SP 800-207 (Zero Trust Architecture):** discussing the elimination of implicit trust zones.
+*   **Microsoft Identity Platform:** Documentation on the "On-Behalf-Of flow".
+*   **Auth0 / Curity.io:** Blogs on "Phantom Tokens" and "Microservices Authentication patterns".
