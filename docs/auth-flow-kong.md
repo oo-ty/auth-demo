@@ -9,6 +9,19 @@ This diagram demonstrates authentication patterns using Kong API Gateways for ce
 3. **Gateway-to-Gateway Trust**: Cross-namespace calls use service tokens between Kong instances
 4. **Rich Plugin Ecosystem**: Rate limiting, correlation IDs, request transformation at the edge
 
+## Kong Standardization
+
+The environment uses a standardized Docker image with a specific set of plugins:
+
+```yaml
+kong-plugins:
+  - lua-resty-jwt:0.2.3-0:dependency
+  - frm-sso:1.5.2-1
+```
+
+- **lua-resty-jwt**: Provides the core JWT validation capabilities.
+- **frm-sso**: A custom/standardized Single Sign-On plugin likely handling specific organizational auth logic.
+
 ## Sequence Diagram
 
 ```mermaid
@@ -52,9 +65,9 @@ sequenceDiagram
     rect rgb(255, 250, 230)
         Note over KongB: Kong Plugins Execute
         KongB->>KongB: 8. Correlation ID Plugin<br/>Generate X-Correlation-ID
-        KongB->>KongB: 9. JWT Plugin<br/>Validate token, check scopes
+        KongB->>KongB: 9. JWT Plugin (lua-resty-jwt)<br/>Validate token, check scopes
         KongB->>KongB: 10. Rate Limiting Plugin<br/>Check consumer quota
-        KongB->>KongB: 11. ACL Plugin<br/>Verify access rights
+        KongB->>KongB: 11. SSO Plugin (frm-sso)<br/>Verify session/ACL
     end
     
     KongB->>AgentB: 12. Route to service<br/>(pre-validated request)
@@ -87,7 +100,7 @@ sequenceDiagram
     AgentA->>ServiceA2: 22. Internal call<br/>(mTLS via service mesh)
     
     Note over ServiceA2: Trusted: same namespace<br/>Kong + mTLS verified
-
+    
     ServiceA2->>ServiceA2: 23. Process request
     ServiceA2-->>AgentA: 24. Return result
 
@@ -106,7 +119,7 @@ sequenceDiagram
 ### Kong Gateway B (Namespace B - Customer-Facing)
 ```yaml
 plugins:
-  - name: jwt
+  - name: jwt # Powered by lua-resty-jwt
     config:
       claims_to_verify: [exp, aud]
       key_claim_name: kid
@@ -129,6 +142,11 @@ plugins:
         headers:
           - X-Consumer-ID:$(consumer.id)
           - X-Consumer-Username:$(consumer.username)
+
+  - name: frm-sso # Standardized SSO/Auth Plugin
+    config:
+        # Standard configuration for the standardized image
+        validate_session: true
 ```
 
 ### Kong Gateway A (Namespace A - Internal/Cross-Namespace)
@@ -152,7 +170,7 @@ plugins:
 |-------|-----------|--------|-------|
 | Customer Login | Access JWT | External IAM | Direct response (no auth code) |
 | Customer Login | Refresh JWT | External IAM | Token renewal |
-| API Request | Customer JWT | External IAM | Validated by Kong B |
+| API Request | Customer JWT | External IAM | Validated by Kong B (lua-resty-jwt) |
 | Cross-Namespace | Service Token | Internal IAM | Kong B → Kong A trust |
 | Intra-Namespace | None (mTLS) | Service Mesh | Implicit trust |
 
@@ -162,7 +180,7 @@ plugins:
 2. **Consistent Policies**: Rate limits, ACLs applied uniformly
 3. **Observability**: All requests traced via correlation IDs
 4. **Token Caching**: Kong caches service tokens for efficiency
-5. **Plugin Ecosystem**: Easy to add new security controls
+5. **Standardized Plugins**: `lua-resty-jwt` and `frm-sso` ensure predictable behavior
 6. **Separation of Concerns**: Auth logic separate from business logic
 
 ## Comparison: Standard vs Kong Flow
